@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">ml-face-recognition</string>
+    <string name="face_image">Face Image</string>
+    <string name="enter_name">Enter Name</string>
+</resources>
