@@ -39,11 +39,11 @@ class FaceAnalyzerImpl @Inject constructor(
     override suspend fun analyzeFaceImage(bitmapImage: Bitmap): PersonModel {
         // Normalize the image
         val tensorImage = normalizeImage(bitmapImage)
-        val outputEmbedding = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
-        interpreter.run(tensorImage.buffer, outputEmbedding)
+        val outputEmbeddingSize = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
+        interpreter.run(tensorImage.buffer, outputEmbeddingSize)
 
         // Match the embedding against the database
-        val recognizedName = findClosestMatch(outputEmbedding[0])
+        val recognizedName = findClosestMatch(outputEmbeddingSize[0])
 
         return PersonModel(recognizedName, bitmapImage)
     }
@@ -51,11 +51,11 @@ class FaceAnalyzerImpl @Inject constructor(
     override suspend fun saveNewFace(personModel: PersonModel): Boolean {
         return try {
             val tensorImage = normalizeImage(personModel.bitMapImage)
-            val outputEmbedding = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
-            interpreter.run(tensorImage.buffer, outputEmbedding)
+            val outputEmbeddingSize = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
+            interpreter.run(tensorImage.buffer, outputEmbeddingSize)
 
             // User does not exist, save them
-            val serializedEncoding = Converters.fromFloatArrayToJson(outputEmbedding[0])
+            val serializedEncoding = Converters.fromFloatArrayToJson(outputEmbeddingSize[0])
             val persona =
                 PersonaEntity(name = personModel.personName, encoding = serializedEncoding)
             personaDao.insertPersona(persona)
