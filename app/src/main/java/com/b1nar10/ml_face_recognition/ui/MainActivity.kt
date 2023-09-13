@@ -3,21 +3,16 @@ package com.b1nar10.ml_face_recognition.ui
 import android.Manifest
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.PointF
-import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.util.Pair
 import android.util.Size
-import android.view.LayoutInflater
-import android.widget.EditText
-import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -25,12 +20,13 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.b1nar10.ml_face_recognition.R
+import com.b1nar10.ml_face_recognition.data.model.PersonModel
 import com.b1nar10.ml_face_recognition.databinding.ActivityMainBinding
-import com.b1nar10.ml_face_recognition.ui.utils.mapToViewCoordinates
+import com.b1nar10.ml_face_recognition.ui.utils.FaceContourGraphic
+import com.b1nar10.ml_face_recognition.ui.utils.saveBitmapToTempFile
+import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -42,7 +38,7 @@ class MainActivity : AppCompatActivity() {
 
     lateinit var viewBinding: ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var faceDetector: FaceDetector
+    private lateinit var faceDetector: FaceDetection
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -79,8 +75,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
-        faceDetector = FaceDetector(
-            context = this,
+        faceDetector = FaceDetection(
+            activity = this,
             onFacesDetected = ::onFacesDetected,
             onFaceCropped = ::onFaceCropped
         )
@@ -89,62 +85,81 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observeUiState() {
-        viewModel.recognitionState.onEach { state ->
-            when (state) {
-                is RecognitionState.Loading -> {
-                    // Show loading indicator
-                }
-
-                is RecognitionState.Recognized -> {
-                    // Display the recognized name
-                    showPersonName(state.name)
-                }
-
-                is RecognitionState.Unknown -> {
-                    // Prompt the user to enter a name
-                    faceDetector.stop()
-                    showNameInputDialog(state.faceBitmap)
-                }
-
-                is RecognitionState.Error -> {
-                    // Display an error message
-                }
+        lifecycleScope.launch {
+            viewModel.uiState.collect { uiState ->
+                handleUiState(uiState)
             }
-        }.launchIn(lifecycleScope)
+        }
+    }
+
+    private fun handleUiState(uiState: FaceRecognitionUiState) {
+        when (uiState.recognitionState) {
+            is RecognitionState.Loading -> {
+                // Handle loading state
+            }
+
+            is RecognitionState.Idle -> {
+                startFaceDetector()
+            }
+
+            is RecognitionState.Recognized -> {
+                // Handle recognized state
+                val name = uiState.recognitionState.name
+                showPersonName(name)
+            }
+
+            is RecognitionState.Unknown -> {
+                // Handle unknown state
+                uiState.recognitionState.faceBitmap?.let { showNameInputDialog(it) }
+            }
+
+            is RecognitionState.Error -> {
+                // Handle error state
+                val errorMessage = uiState.recognitionState.message
+                // Display the error message or other UI updates
+            }
+        }
     }
 
     // Show person's name when be recognized
     private fun showPersonName(name: String) {
         Toast.makeText(this, "Hello $name", Toast.LENGTH_LONG).show()
 
+        startFaceDetector()
+    }
+
+    private fun showNameInputDialog(faceBitmap: Bitmap) {
+        val dialog = InputDetailsDialogFragment()
+        val bitmapPath = saveBitmapToTempFile(faceBitmap, this)
+        val args = Bundle()
+        args.putString("bitmap_path", bitmapPath)
+        dialog.arguments = args
+
+        dialog.setListener(object : InputDetailsDialogFragment.InputDetailsListener {
+            override fun onDetailsEntered(id: String, name: String) {
+                viewModel.onResetRecognitionState()
+                viewModel.saveNewFace(
+                    PersonModel(
+                        id = id,
+                        personName = name,
+                        bitMapImage = faceBitmap
+                    )
+                )
+            }
+
+            override fun cancel() {
+                viewModel.onResetRecognitionState()
+            }
+        })
+
+        dialog.show(supportFragmentManager, "InputDetailsDialogFragment")
+    }
+
+    private fun startFaceDetector() {
         // Wait for 1 second before restarting face analysis
         Handler(Looper.getMainLooper()).postDelayed({
             faceDetector.start()
         }, 1000)
-    }
-
-    private fun showNameInputDialog(faceBitmap: Bitmap) {
-        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_input_name, null)
-        val nameEditText = dialogView.findViewById<EditText>(R.id.nameEditText)
-        val faceImageView = dialogView.findViewById<ImageView>(R.id.faceImageView)
-
-        faceImageView.setImageBitmap(faceBitmap)
-
-        AlertDialog.Builder(this)
-            .setView(dialogView)
-            .setTitle("Enter Name")
-            .setPositiveButton("Save") { _, _ ->
-                val name = nameEditText.text.toString()
-                if (name.isNotEmpty()) {
-                    viewModel.saveNewFace(name, faceBitmap)
-                } else {
-                    Toast.makeText(this, "Name cannot be empty!", Toast.LENGTH_SHORT).show()
-                }
-            }
-            .setNegativeButton("Cancel") { _, _ ->
-                faceDetector.start()
-            }
-            .show()
     }
 
     private fun startCamera() {
@@ -196,19 +211,36 @@ class MainActivity : AppCompatActivity() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun onFacesDetected(faces: Array<Rect>, cameraSize: Size, rotationDegrees: Int) {
-        val viewSize = Size(viewBinding.overlayView.width, viewBinding.overlayView.height)
+    private fun onFacesDetected(faces: List<Face>, cameraSize: Size, rotationDegrees: Int) =
+        with(viewBinding.graphicOverlay) {
+            // Task completed successfully
+            if (faces.isEmpty()) {
+                showToast("No face found")
+                return
+            }
 
-        val transformedFaces =
-            faces.map { it.mapToViewCoordinates(cameraSize, viewSize, it, rotationDegrees) }
-                .toTypedArray()
-        runOnUiThread {
-            viewBinding.overlayView.updateFaces(transformedFaces)
+            this.clear()
+            for (i in faces.indices) {
+                val face = faces[i]
+                val faceGraphic = FaceContourGraphic(this)
+                this.add(faceGraphic)
+                faceGraphic.updateFace(face)
+            }
         }
-    }
 
     private fun onFaceCropped(face: Bitmap) {
+        faceDetector.stop()
         viewModel.analyzeFaceImage(face)
+    }
+
+    fun getTargetedWidthHeight(): Pair<Int, Int> {
+        val maxWidthForPortraitMode: Int = viewBinding.viewFinder.width
+        val maxHeightForPortraitMode: Int = viewBinding.viewFinder.height
+        return Pair(maxWidthForPortraitMode, maxHeightForPortraitMode)
+    }
+
+    private fun showToast(message: String) {
+        Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
@@ -218,7 +250,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ml-face-recognition"
-        private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private val REQUIRED_PERMISSIONS =
             mutableListOf(Manifest.permission.CAMERA)
                 .apply {

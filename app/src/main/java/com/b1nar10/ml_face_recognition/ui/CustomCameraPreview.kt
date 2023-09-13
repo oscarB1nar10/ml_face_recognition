@@ -12,6 +12,7 @@ import android.view.View
 class CustomCameraPreview(context: Context, attrs: AttributeSet) : View(context, attrs) {
     private val rectangles: MutableList<Rect> = mutableListOf()
     private val handler = android.os.Handler(Looper.getMainLooper())
+    private var aspectRatio : Float = 0f
 
 
     private val paint = Paint().apply {
@@ -27,9 +28,10 @@ class CustomCameraPreview(context: Context, attrs: AttributeSet) : View(context,
         }
     }
 
-    fun updateFaces(faces: Array<Rect>) {
+    fun updateFaces(faces: List<Rect>) {
         rectangles.clear()
         rectangles.addAll(faces)
         invalidate() // This will trigger onDraw
     }
+
 }
