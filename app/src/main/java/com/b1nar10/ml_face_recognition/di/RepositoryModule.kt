@@ -4,7 +4,6 @@ import android.content.Context
 import com.b1nar10.ml_face_recognition.data.FaceAnalyzerImpl
 import com.b1nar10.ml_face_recognition.data.FaceAnalyzerRepository
 import com.b1nar10.ml_face_recognition.data.loadModelFile
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,9 +27,6 @@ class RepositoryModule {
     @Provides
     @Singleton
     fun provideInterpreter(mappedByteBuffer: MappedByteBuffer): Interpreter {
-        /*val options = Interpreter.Options()
-        options.numThreads = 4
-        options.useNNAPI = false // Disable NNAPI*/
         return Interpreter(mappedByteBuffer)
     }
 

@@ -2,8 +2,11 @@ package com.b1nar10.ml_face_recognition.data
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.b1nar10.ml_face_recognition.data.local_datasource.EmbeddingDao
+import com.b1nar10.ml_face_recognition.data.local_datasource.EmbeddingEntity
 import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaDao
 import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaEntity
+import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaWithEmbeddingsDao
 import com.b1nar10.ml_face_recognition.data.model.PersonModel
 import com.b1nar10.ml_face_recognition.data.utility.Converters
 import org.tensorflow.lite.DataType
@@ -23,7 +26,9 @@ import kotlin.math.pow
  */
 class FaceAnalyzerImpl @Inject constructor(
     private val interpreter: Interpreter,
-    private val personaDao: PersonaDao          // Data access object for the Room database
+    private val personaDao: PersonaDao, // Data access object for the Room database
+    private val embeddingDao: EmbeddingDao,
+    private val personaWithEmbeddingsDao: PersonaWithEmbeddingsDao
 ) : FaceAnalyzerRepository {
     private val TAG = "FaceAnalyzerImpl"
     private val tensorImage: TensorImage = TensorImage(DataType.FLOAT32)
@@ -45,7 +50,7 @@ class FaceAnalyzerImpl @Inject constructor(
         // Match the embedding against the database
         val recognizedName = findClosestMatch(outputEmbeddingSize[0])
 
-        return PersonModel(recognizedName, bitmapImage)
+        return PersonModel(personName = recognizedName, bitMapImage = bitmapImage)
     }
 
     override suspend fun saveNewFace(personModel: PersonModel): Boolean {
@@ -54,11 +59,32 @@ class FaceAnalyzerImpl @Inject constructor(
             val outputEmbeddingSize = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
             interpreter.run(tensorImage.buffer, outputEmbeddingSize)
 
+            val ids1 = embeddingDao.getAllIds()
+            println("ids1: $ids1")
+
             // User does not exist, save them
             val serializedEncoding = Converters.fromFloatArrayToJson(outputEmbeddingSize[0])
             val persona =
-                PersonaEntity(name = personModel.personName, encoding = serializedEncoding)
-            personaDao.insertPersona(persona)
+                PersonaEntity(id = personModel.id, name = personModel.personName)
+            val personInsert = personaDao.insertPersona(persona)
+            println("personInsert: $personInsert")
+
+            val personaIds = personaDao.getPersonaIds()
+            println("personaIds: $personaIds")
+
+            val ids = embeddingDao.getAllIds()
+            println("ids: $ids")
+            val maxId = if (ids.isEmpty()) 0 else ids.max()
+            val newEmbeddingId = maxId + 1
+            val embeddingSaved = embeddingDao.insertEmbedding(
+                EmbeddingEntity(
+                    id = newEmbeddingId,
+                    encoding = serializedEncoding,
+                    personaId = personModel.id
+                )
+            )
+
+            println("embeddingSaved: $embeddingSaved")
 
             // Return true to indicate success
             true
@@ -75,33 +101,35 @@ class FaceAnalyzerImpl @Inject constructor(
      * @return Name of the closest match or "Unknown".
      */
     private suspend fun findClosestMatch(embedding: FloatArray): String {
-        val knownEmbeddings = getAllKnownEmbeddings()
+        try {
+            val knownEmbeddings = embeddingDao.getEmbeddings()
 
-        var minDistance = Float.MAX_VALUE
-        var closestMatch = "Unknown"
+            var minDistance = Float.MAX_VALUE
+            var userId = ""
 
-        // Calculate the distance between the input embedding and each known embedding
-        for ((name, knownEmbedding) in knownEmbeddings) {
-            val distance =
-                calculateDistance(embedding, Converters.fromJsonToFloatArray(knownEmbedding))
-            if (distance < minDistance) {
-                minDistance = distance
-                closestMatch = name
+            // Calculate the distance between the input embedding and each known embedding
+            for (knownEmbedding in knownEmbeddings) {
+                val distance =
+                    calculateDistance(
+                        embedding,
+                        Converters.fromJsonToFloatArray(knownEmbedding.encoding)
+                    )
+                if (distance < minDistance) {
+                    minDistance = distance
+                    userId = knownEmbedding.personaId
+                }
             }
+
+            // Only return the closest match if it's below a certain threshold
+            val recognitionThreshold = 0.5f
+            return if (minDistance < recognitionThreshold) {
+                personaDao.getPersona(userId).name
+            } else {
+                "Unknown"
+            }
+        } catch (e: Exception) {
+            return ""
         }
-
-        // Only return the closest match if it's below a certain threshold
-        val recognitionThreshold = 0.5f
-        return if (minDistance < recognitionThreshold) closestMatch else "Unknown"
-    }
-
-    /**
-     * Fetches all known embeddings from the database.
-     * @return A map of names to their associated embeddings.
-     */
-    private suspend fun getAllKnownEmbeddings(): Map<String, String> {
-        val personas = personaDao.getAllPersonas()
-        return personas.associateBy({ it.name }, { it.encoding })
     }
 
     /**
@@ -127,7 +155,12 @@ class FaceAnalyzerImpl @Inject constructor(
     private fun normalizeImage(bitmapImage: Bitmap): TensorImage {
         // Define the preprocessing operations
         val imageProcessor = ImageProcessor.Builder()
-            .add(ResizeWithCropOrPadOp(IMAGE_TARGET_SIZE, IMAGE_TARGET_SIZE))  // Crop/pad the image to the target size
+            .add(
+                ResizeWithCropOrPadOp(
+                    IMAGE_TARGET_SIZE,
+                    IMAGE_TARGET_SIZE
+                )
+            )  // Crop/pad the image to the target size
             .add(
                 ResizeOp(
                     IMAGE_TARGET_SIZE,
@@ -144,7 +177,7 @@ class FaceAnalyzerImpl @Inject constructor(
     }
 
     companion object {
-        const val IMAGE_TARGET_SIZE =  224
+        const val IMAGE_TARGET_SIZE = 224
         const val FEATURE_VECTOR_SIZE = 1280
     }
 }

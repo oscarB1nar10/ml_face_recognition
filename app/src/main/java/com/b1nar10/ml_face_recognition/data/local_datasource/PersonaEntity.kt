@@ -6,6 +6,6 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "persona")
 data class PersonaEntity(
-    @PrimaryKey @ColumnInfo(name="name") val name: String,
-    @ColumnInfo(name="encoding") val encoding: String
+    @PrimaryKey @ColumnInfo(name="persona_id") val id: String,
+    @ColumnInfo(name="name") val name: String
 )

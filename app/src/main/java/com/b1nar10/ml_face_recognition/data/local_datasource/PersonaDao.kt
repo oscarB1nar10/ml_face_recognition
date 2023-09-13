@@ -8,8 +8,11 @@ import androidx.room.Query
 @Dao
 interface PersonaDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertPersona(persona: PersonaEntity)
+    fun insertPersona(persona: PersonaEntity): Long
 
-    @Query("SELECT * FROM persona")
-    suspend fun getAllPersonas(): List<PersonaEntity>
+    @Query("SELECT * FROM persona WHERE persona_id = :personaId")
+    fun getPersona(personaId: String): PersonaEntity
+
+    @Query("SELECT persona_id FROM persona")
+    fun getPersonaIds(): List<String>
 }
