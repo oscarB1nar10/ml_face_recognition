@@ -59,9 +59,6 @@ class FaceAnalyzerImpl @Inject constructor(
             val outputEmbeddingSize = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
             interpreter.run(tensorImage.buffer, outputEmbeddingSize)
 
-            val ids1 = embeddingDao.getAllIds()
-            println("ids1: $ids1")
-
             // User does not exist, save them
             val serializedEncoding = Converters.fromFloatArrayToJson(outputEmbeddingSize[0])
             val persona =
@@ -69,16 +66,8 @@ class FaceAnalyzerImpl @Inject constructor(
             val personInsert = personaDao.insertPersona(persona)
             println("personInsert: $personInsert")
 
-            val personaIds = personaDao.getPersonaIds()
-            println("personaIds: $personaIds")
-
-            val ids = embeddingDao.getAllIds()
-            println("ids: $ids")
-            val maxId = if (ids.isEmpty()) 0 else ids.max()
-            val newEmbeddingId = maxId + 1
             val embeddingSaved = embeddingDao.insertEmbedding(
                 EmbeddingEntity(
-                    id = newEmbeddingId,
                     encoding = serializedEncoding,
                     personaId = personModel.id
                 )
@@ -121,7 +110,7 @@ class FaceAnalyzerImpl @Inject constructor(
             }
 
             // Only return the closest match if it's below a certain threshold
-            val recognitionThreshold = 0.5f
+            val recognitionThreshold = 10.0f
             return if (minDistance < recognitionThreshold) {
                 personaDao.getPersona(userId).name
             } else {

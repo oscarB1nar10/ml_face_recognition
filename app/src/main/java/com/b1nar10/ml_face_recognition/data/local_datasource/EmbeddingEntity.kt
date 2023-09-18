@@ -18,7 +18,7 @@ import androidx.room.PrimaryKey
     indices = [Index(value = ["personOwnerId"])]
 )
 data class EmbeddingEntity(
-    @PrimaryKey @ColumnInfo(name = "embedding_id") val id: Int,
+    @PrimaryKey(autoGenerate = true) @ColumnInfo(name = "embedding_id") val id: Int? = null,
     @ColumnInfo(name = "encoding") val encoding: String,
     @ColumnInfo(name = "personOwnerId") val personaId: String
 )
