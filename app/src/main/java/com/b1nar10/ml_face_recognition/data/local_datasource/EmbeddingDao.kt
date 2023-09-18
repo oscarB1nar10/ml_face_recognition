@@ -12,7 +12,4 @@ interface EmbeddingDao {
 
     @Query("SELECT * FROM embedding")
     fun getEmbeddings(): List<EmbeddingEntity>
-
-    @Query("SELECT embedding_id FROM embedding")
-    fun getAllIds(): List<Int>
 }
