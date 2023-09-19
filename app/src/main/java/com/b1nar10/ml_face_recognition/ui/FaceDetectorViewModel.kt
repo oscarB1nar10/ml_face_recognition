@@ -37,12 +37,13 @@ class FaceDetectorViewModel @Inject constructor(
                             )
                         )
                     }
-                } else if (personModel.personName.isNotEmpty()){
+                } else if (personModel.personName.isNotEmpty()) {
                     _uiState.update {
                         it.copy(
                             recognitionState = RecognitionState.Recognized(
                                 name = personModel.personName
-                            )
+                            ),
+                            lastUpdated = System.currentTimeMillis()
                         )
                     }
                 }
@@ -61,7 +62,8 @@ class FaceDetectorViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val isSaved = faceAnalyzerRepository.saveNewFace(personModel)
-                if (isSaved) {
+                if (isSaved) onResetRecognitionState()
+                /*if (isSaved) {
                     _uiState.update {
                         it.copy(recognitionState = RecognitionState.Recognized(personModel.personName))
                     }
@@ -69,7 +71,7 @@ class FaceDetectorViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(recognitionState = RecognitionState.Unknown(personModel.bitMapImage))
                     }
-                }
+                }*/
             } catch (e: Exception) {
                 // Handle any exceptions that occurred during recognition
                 _uiState.update {

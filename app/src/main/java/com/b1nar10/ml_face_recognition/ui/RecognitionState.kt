@@ -20,5 +20,6 @@ sealed class RecognitionState {
 
 data class FaceRecognitionUiState(
     val isFaceImageDialogOpen: Boolean = false,
-    val recognitionState: RecognitionState = RecognitionState.Loading
+    val recognitionState: RecognitionState = RecognitionState.Loading,
+    val lastUpdated: Long = System.currentTimeMillis()
 )
