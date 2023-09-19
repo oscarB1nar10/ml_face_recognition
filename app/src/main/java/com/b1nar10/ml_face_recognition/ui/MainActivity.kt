@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.util.Pair
 import android.util.Size
@@ -27,6 +28,7 @@ import com.b1nar10.ml_face_recognition.ui.utils.saveBitmapToTempFile
 import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
@@ -39,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var viewBinding: ActivityMainBinding
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var faceDetector: FaceDetection
+    private lateinit var textToSpeech: TextToSpeech
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -72,6 +75,12 @@ class MainActivity : AppCompatActivity() {
             startCamera()
         } else {
             requestPermissions()
+        }
+
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status != TextToSpeech.ERROR) {
+                textToSpeech.language = Locale.US
+            }
         }
 
         cameraExecutor = Executors.newSingleThreadExecutor()
@@ -124,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     // Show person's name when be recognized
     private fun showPersonName(name: String) {
         Toast.makeText(this, "Hello $name", Toast.LENGTH_LONG).show()
-
+        speakText("Hello $name estupido")
         startFaceDetector()
     }
 
@@ -137,7 +146,7 @@ class MainActivity : AppCompatActivity() {
 
         dialog.setListener(object : InputDetailsDialogFragment.InputDetailsListener {
             override fun onDetailsEntered(id: String, name: String) {
-                viewModel.onResetRecognitionState()
+                //viewModel.onResetRecognitionState()
                 viewModel.saveNewFace(
                     PersonModel(
                         id = id,
@@ -155,11 +164,12 @@ class MainActivity : AppCompatActivity() {
         dialog.show(supportFragmentManager, "InputDetailsDialogFragment")
     }
 
-    private fun startFaceDetector() {
+    private fun startFaceDetector(delayToStartRecognition: Long = 1000) {
         // Wait for 1 second before restarting face analysis
         Handler(Looper.getMainLooper()).postDelayed({
+            println("startFaceDetector")
             faceDetector.start()
-        }, 1000)
+        }, delayToStartRecognition)
     }
 
     private fun startCamera() {
@@ -239,12 +249,22 @@ class MainActivity : AppCompatActivity() {
         return Pair(maxWidthForPortraitMode, maxHeightForPortraitMode)
     }
 
+    fun speakText(text: String) {
+        val params = Bundle()
+        textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, params, "id")
+    }
+
+
     private fun showToast(message: String) {
         Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        if (::textToSpeech.isInitialized) {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
         cameraExecutor.shutdown()
     }
 
