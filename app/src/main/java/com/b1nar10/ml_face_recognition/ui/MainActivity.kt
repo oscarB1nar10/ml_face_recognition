@@ -9,11 +9,10 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
-import android.util.Pair
-import android.util.Size
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -28,20 +27,23 @@ import com.b1nar10.ml_face_recognition.ui.utils.saveBitmapToTempFile
 import com.google.mlkit.vision.face.Face
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
-import java.util.Locale
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import javax.inject.Inject
 
 
 @AndroidEntryPoint
 class MainActivity : AppCompatActivity() {
 
-    private val viewModel: FaceDetectorViewModel by viewModels()
+    // Inject the TextToSpeech instance using Dagger Hilt
+    @Inject
+    lateinit var textToSpeech: TextToSpeech
 
-    lateinit var viewBinding: ActivityMainBinding
-    private lateinit var cameraExecutor: ExecutorService
+    @Inject
+    lateinit var cameraExecutor: ExecutorService
     private lateinit var faceDetector: FaceDetection
-    private lateinit var textToSpeech: TextToSpeech
+
+    private val viewModel: FaceDetectorViewModel by viewModels()
+    lateinit var viewBinding: ActivityMainBinding
 
     private val activityResultLauncher =
         registerForActivityResult(
@@ -70,27 +72,30 @@ class MainActivity : AppCompatActivity() {
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(viewBinding.root)
 
+        checkPermissionsStatus()
+        // Observe changes in the UI state
+        observeUiState()
+        // Configure UI elements and utilities
+        configureUi()
+    }
+
+    // Check and request necessary permissions
+    private fun checkPermissionsStatus() {
         // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera()
         } else {
             requestPermissions()
         }
+    }
 
-        textToSpeech = TextToSpeech(this) { status ->
-            if (status != TextToSpeech.ERROR) {
-                textToSpeech.language = Locale.US
-            }
-        }
-
-        cameraExecutor = Executors.newSingleThreadExecutor()
+    private fun configureUi() {
+        // Configure face detection utility
         faceDetector = FaceDetection(
             activity = this,
             onFacesDetected = ::onFacesDetected,
             onFaceCropped = ::onFaceCropped
         )
-
-        observeUiState()
     }
 
     private fun observeUiState() {
@@ -103,9 +108,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleUiState(uiState: FaceRecognitionUiState) {
         when (uiState.recognitionState) {
-            is RecognitionState.Loading -> {
-                // Handle loading state
-            }
 
             is RecognitionState.Idle -> {
                 startFaceDetector()
@@ -125,18 +127,31 @@ class MainActivity : AppCompatActivity() {
             is RecognitionState.Error -> {
                 // Handle error state
                 val errorMessage = uiState.recognitionState.message
-                // Display the error message or other UI updates
+                showErrorDialog(errorMessage)
             }
+
+            else -> {}
         }
     }
 
-    // Show person's name when be recognized
+    // Start face detection after delay
+    private fun startFaceDetector(delayToStartRecognition: Long = 1000) {
+        // Wait for 1 second before restarting face analysis
+        Handler(Looper.getMainLooper()).postDelayed({
+            println("startFaceDetector")
+            faceDetector.start()
+        }, delayToStartRecognition)
+    }
+
+    // Display recognized person's name and speak it
     private fun showPersonName(name: String) {
-        Toast.makeText(this, "Hello $name", Toast.LENGTH_LONG).show()
-        speakText("Hello $name estupido")
+        showToast("Hello $name")
+        //Toast.makeText(this, "Hello $name", Toast.LENGTH_LONG).show()
+        speakText("Hello $name")
         startFaceDetector()
     }
 
+    // Show a dialog to input details for unrecognized faces
     private fun showNameInputDialog(faceBitmap: Bitmap) {
         val dialog = InputDetailsDialogFragment()
         val bitmapPath = saveBitmapToTempFile(faceBitmap, this)
@@ -146,7 +161,6 @@ class MainActivity : AppCompatActivity() {
 
         dialog.setListener(object : InputDetailsDialogFragment.InputDetailsListener {
             override fun onDetailsEntered(id: String, name: String) {
-                //viewModel.onResetRecognitionState()
                 viewModel.saveNewFace(
                     PersonModel(
                         id = id,
@@ -164,14 +178,18 @@ class MainActivity : AppCompatActivity() {
         dialog.show(supportFragmentManager, "InputDetailsDialogFragment")
     }
 
-    private fun startFaceDetector(delayToStartRecognition: Long = 1000) {
-        // Wait for 1 second before restarting face analysis
-        Handler(Looper.getMainLooper()).postDelayed({
-            println("startFaceDetector")
-            faceDetector.start()
-        }, delayToStartRecognition)
+    // Display an error dialog
+    private fun showErrorDialog(errorMessage: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Error")
+            .setMessage(errorMessage)
+            .setPositiveButton("OK") { dialog, _ ->
+                dialog.dismiss()
+            }
+            .show()
     }
 
+    // Start the camera and binds its lifecycle to the activity
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
@@ -221,39 +239,33 @@ class MainActivity : AppCompatActivity() {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun onFacesDetected(faces: List<Face>, cameraSize: Size, rotationDegrees: Int) =
-        with(viewBinding.graphicOverlay) {
-            // Task completed successfully
-            if (faces.isEmpty()) {
-                showToast("No face found")
-                return
-            }
-
-            this.clear()
-            for (i in faces.indices) {
-                val face = faces[i]
-                val faceGraphic = FaceContourGraphic(this)
-                this.add(faceGraphic)
-                faceGraphic.updateFace(face)
-            }
+    // Handle detected faces and draw overlays on them
+    private fun onFacesDetected(faces: List<Face>) = with(viewBinding.graphicOverlay) {
+        // Task completed successfully
+        if (faces.isEmpty()) {
+            showToast("No face found")
+            return
         }
 
+        this.clear()
+        for (i in faces.indices) {
+            val face = faces[i]
+            val faceGraphic = FaceContourGraphic(this)
+            this.add(faceGraphic)
+            faceGraphic.updateFace(face)
+        }
+    }
+
+    // Handle cropped face images
     private fun onFaceCropped(face: Bitmap) {
         faceDetector.stop()
         viewModel.analyzeFaceImage(face)
     }
 
-    fun getTargetedWidthHeight(): Pair<Int, Int> {
-        val maxWidthForPortraitMode: Int = viewBinding.viewFinder.width
-        val maxHeightForPortraitMode: Int = viewBinding.viewFinder.height
-        return Pair(maxWidthForPortraitMode, maxHeightForPortraitMode)
-    }
-
-    fun speakText(text: String) {
+    private fun speakText(text: String) {
         val params = Bundle()
         textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, params, "id")
     }
-
 
     private fun showToast(message: String) {
         Toast.makeText(applicationContext, message, Toast.LENGTH_SHORT).show()

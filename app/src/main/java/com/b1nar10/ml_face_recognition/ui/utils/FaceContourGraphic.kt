@@ -5,13 +5,13 @@ import android.graphics.Color
 import android.graphics.Paint
 import com.google.mlkit.vision.face.Face
 
-class FaceContourGraphic(overlay: GraphicOverlay) : GraphicOverlay.Graphic(overlay) {
+/**
+ * A graphic to render face contours on an associated graphic overlay view.
+ * This class receives face detections from the detector and updates the overlay view accordingly.
+ */
+class FaceContourGraphic(overlay: GraphicOverlay) : Graphic(overlay) {
 
     companion object {
-        private const val FACE_POSITION_RADIUS = 10.0f
-        private const val ID_TEXT_SIZE = 70.0f
-        private const val ID_Y_OFFSET = 80.0f
-        private const val ID_X_OFFSET = -70.0f
         private const val BOX_STROKE_WIDTH = 5.0f
 
         private val COLOR_CHOICES = arrayOf(
@@ -20,10 +20,9 @@ class FaceContourGraphic(overlay: GraphicOverlay) : GraphicOverlay.Graphic(overl
         private var currentColorIndex = 0
     }
 
-    private val facePositionPaint: Paint
-    private val idPaint: Paint
     private val boxPaint: Paint
 
+    // The detected face instance
     @Volatile
     private var face: Face? = null
 
@@ -31,13 +30,7 @@ class FaceContourGraphic(overlay: GraphicOverlay) : GraphicOverlay.Graphic(overl
         currentColorIndex = (currentColorIndex + 1) % COLOR_CHOICES.size
         val selectedColor = COLOR_CHOICES[currentColorIndex]
 
-        facePositionPaint = Paint().apply { color = selectedColor }
-
-        idPaint = Paint().apply {
-            color = selectedColor
-            textSize = ID_TEXT_SIZE
-        }
-
+        // Paint for drawing the bounding box of the detected face
         boxPaint = Paint().apply {
             color = selectedColor
             style = Paint.Style.STROKE
@@ -45,11 +38,13 @@ class FaceContourGraphic(overlay: GraphicOverlay) : GraphicOverlay.Graphic(overl
         }
     }
 
+    // Updates the face instance from the latest detection
     fun updateFace(face: Face) {
         this.face = face
         postInvalidate()
     }
 
+    // Draws the face bounding box on the overlay
     override fun draw(canvas: Canvas) {
         val face = this.face ?: return
 

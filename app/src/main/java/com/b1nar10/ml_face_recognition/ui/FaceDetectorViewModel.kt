@@ -63,15 +63,6 @@ class FaceDetectorViewModel @Inject constructor(
             try {
                 val isSaved = faceAnalyzerRepository.saveNewFace(personModel)
                 if (isSaved) onResetRecognitionState()
-                /*if (isSaved) {
-                    _uiState.update {
-                        it.copy(recognitionState = RecognitionState.Recognized(personModel.personName))
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(recognitionState = RecognitionState.Unknown(personModel.bitMapImage))
-                    }
-                }*/
             } catch (e: Exception) {
                 // Handle any exceptions that occurred during recognition
                 _uiState.update {

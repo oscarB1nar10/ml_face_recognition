@@ -12,6 +12,7 @@ import android.util.Pair
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import com.b1nar10.ml_face_recognition.ui.utils.getTargetedWidthHeight
 import com.b1nar10.ml_face_recognition.ui.utils.rotateBitmap
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
@@ -22,19 +23,17 @@ import java.io.ByteArrayOutputStream
 
 class FaceDetection(
     private val activity: MainActivity,
-    private val onFacesDetected: (faces: List<Face>, cameraSize: Size, rotationDegrees: Int) -> Unit,
+    private val onFacesDetected: (faces: List<Face>) -> Unit,
     private val onFaceCropped: (face: Bitmap) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     private var detector: FaceDetector
     private lateinit var cameraSize: Size
     private var isAnalysisActive = true
-    lateinit var viewSize: Size
 
     init {
         val options = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            //.setContourMode(FaceDetectorOptions.CONTOUR_MODE_NONE)
             .build()
 
         detector = FaceDetection.getClient(options)
@@ -73,7 +72,7 @@ class FaceDetection(
         if (image != null) {
             detector.process(image)
                 .addOnSuccessListener { faces ->
-                    handleFaceDetectionSuccess(faces, bitmap, image, imageProxy.imageInfo.rotationDegrees)
+                    handleFaceDetectionSuccess(faces, bitmap, image)
                 }
                 .addOnFailureListener { e ->
                     // Handle any errors here. Possibly log them.
@@ -88,10 +87,10 @@ class FaceDetection(
     }
 
     @androidx.camera.core.ExperimentalGetImage
-    private fun handleFaceDetectionSuccess(faces: List<Face>, bitmapImage: Bitmap, image: InputImage, rotationDegrees: Int) {
+    private fun handleFaceDetectionSuccess(faces: List<Face>, bitmapImage: Bitmap, image: InputImage) {
         if (faces.isNotEmpty()) {
             cameraSize = Size(image.width, image.height)
-            onFacesDetected(faces, cameraSize, rotationDegrees)
+            onFacesDetected(faces)
         }
 
         // Consider uncommenting or removing the below code based on the requirements.
