@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import android.util.Size
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -25,6 +26,7 @@ import com.b1nar10.ml_face_recognition.databinding.ActivityMainBinding
 import com.b1nar10.ml_face_recognition.ui.utils.FaceContourGraphic
 import com.b1nar10.ml_face_recognition.ui.utils.saveBitmapToTempFile
 import com.google.mlkit.vision.face.Face
+import com.google.mlkit.vision.face.FaceDetector
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.util.concurrent.ExecutorService
@@ -39,8 +41,11 @@ class MainActivity : AppCompatActivity() {
     lateinit var textToSpeech: TextToSpeech
 
     @Inject
+    lateinit var faceDetector: FaceDetector
+
+    @Inject
     lateinit var cameraExecutor: ExecutorService
-    private lateinit var faceDetector: FaceDetection
+    private lateinit var faceDetection: FaceDetection
 
     private val viewModel: FaceDetectorViewModel by viewModels()
     lateinit var viewBinding: ActivityMainBinding
@@ -91,10 +96,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun configureUi() {
         // Configure face detection utility
-        faceDetector = FaceDetection(
+        faceDetection = FaceDetection(
             activity = this,
+            faceDetector = faceDetector,
             onFacesDetected = ::onFacesDetected,
-            onFaceCropped = ::onFaceCropped
+            onFaceCropped = ::onFaceCropped,
         )
     }
 
@@ -139,7 +145,7 @@ class MainActivity : AppCompatActivity() {
         // Wait for 1 second before restarting face analysis
         Handler(Looper.getMainLooper()).postDelayed({
             println("startFaceDetector")
-            faceDetector.start()
+            faceDetection.start()
         }, delayToStartRecognition)
     }
 
@@ -205,9 +211,11 @@ class MainActivity : AppCompatActivity() {
                 }
 
             val imageAnalyzer = ImageAnalysis.Builder()
+                .setTargetResolution(Size(1280, 720))
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .also {
-                    it.setAnalyzer(cameraExecutor, faceDetector)
+                    it.setAnalyzer(cameraExecutor, faceDetection)
                 }
 
             // Select back camera as a default
@@ -258,7 +266,7 @@ class MainActivity : AppCompatActivity() {
 
     // Handle cropped face images
     private fun onFaceCropped(face: Bitmap) {
-        faceDetector.stop()
+        faceDetection.stop()
         viewModel.analyzeFaceImage(face)
     }
 

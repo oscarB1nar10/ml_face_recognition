@@ -2,6 +2,9 @@ package com.b1nar10.ml_face_recognition.di
 
 import android.app.Application
 import android.speech.tts.TextToSpeech
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetector
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,11 +26,20 @@ class ActivityModule {
             }
         }
 
-        return  textToSpeech
+        return textToSpeech
     }
 
     @Provides
     fun provideExecutorService(): ExecutorService {
         return Executors.newSingleThreadExecutor()
+    }
+
+    @Provides
+    fun provideFaceDetector(): FaceDetector {
+        val options = FaceDetectorOptions.Builder()
+            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
+            .build()
+
+        return FaceDetection.getClient(options)
     }
 }
