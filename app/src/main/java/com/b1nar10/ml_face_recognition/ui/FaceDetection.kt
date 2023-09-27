@@ -73,7 +73,7 @@ class FaceDetection(
                 .addOnSuccessListener { faces ->
                     handleFaceDetectionSuccess(faces, bitmap)
                 }
-                .addOnFailureListener { e ->
+                .addOnFailureListener {
                     // Handle any errors here. Possibly log them.
                 }
                 .addOnCompleteListener {
@@ -113,13 +113,28 @@ class FaceDetection(
      */
     @androidx.camera.core.ExperimentalGetImage
     private fun cropFaceBitmap(bitmapImage: Bitmap, boundingBox: Rect): Bitmap? {
+        // Define the padding as a percentage of the bounding box's width and height
+        val paddingWidthPercentage = 0.10 // Set padding to 10% of the bounding box width
+        val paddingHeightPercentage = 0.15 // Set padding to 15% of the bounding box height
+
+        // Compute the left and top coordinates of the new bounding box
+        val paddingWidth = (boundingBox.width() * paddingWidthPercentage).toInt()
+        val paddingHeight = (boundingBox.height() * paddingHeightPercentage).toInt()
+
+        // Calculate the width and height of the new bounding box
+        // Add padding to both sides of the bounding box (hence the multiplication by 2)
+        val paddedLeft = (boundingBox.left - paddingWidth).coerceAtLeast(0)
+        val paddedTop = (boundingBox.top - paddingHeight).coerceAtLeast(0)
+        val paddedWidth = (boundingBox.width() + (2 * paddingWidth)).coerceAtMost(bitmapImage.width - paddedLeft)
+        val paddedHeight = (boundingBox.height() + (2 * paddingHeight)).coerceAtMost(bitmapImage.height - paddedTop)
+
         return bitmapImage.let {
             Bitmap.createBitmap(
                 it,
-                boundingBox.left,
-                boundingBox.top,
-                boundingBox.width(),
-                boundingBox.height()
+                paddedLeft,
+                paddedTop,
+                paddedWidth,
+                paddedHeight
             )
         }
     }

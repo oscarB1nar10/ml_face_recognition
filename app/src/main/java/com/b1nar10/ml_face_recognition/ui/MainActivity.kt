@@ -211,7 +211,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
             val imageAnalyzer = ImageAnalysis.Builder()
-                .setTargetResolution(Size(1280, 720))
+                .setTargetResolution(IMAGE_RESOLUTION)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .also {
@@ -290,6 +290,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val TAG = "ml-face-recognition"
+        private val IMAGE_RESOLUTION = Size(1280, 720)
         private val REQUIRED_PERMISSIONS =
             mutableListOf(Manifest.permission.CAMERA)
                 .apply {
