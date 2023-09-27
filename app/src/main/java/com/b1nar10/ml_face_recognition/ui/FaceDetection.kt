@@ -26,29 +26,38 @@ class FaceDetection(
 
     @androidx.camera.core.ExperimentalGetImage
     override fun analyze(imageProxy: ImageProxy) {
+        // If analysis is not active, close the current image
         if (!isAnalysisActive) {
             imageProxy.close()
             return
         }
 
+        // Check if the image format is RGBA_8888
         if (imageProxy.format == PixelFormat.RGBA_8888) {
             val rotationDegrees = imageProxy.imageInfo.rotationDegrees.toFloat()
             val bitmapBuffer = imageProxy.planes[0].buffer
+            // Convert buffer to Bitmap
             val bitmap =
                 Bitmap.createBitmap(imageProxy.width, imageProxy.height, Bitmap.Config.ARGB_8888)
             bitmap.copyPixelsFromBuffer(bitmapBuffer)
 
+            // Rotate and resize the Bitmap
             val rotatedBitmap = bitmap?.let { rotateBitmap(it, rotationDegrees) }
             val resizedBitmap = rotatedBitmap?.let { resizePreviewImage(it) }
 
+            // Process the image for face detection
             processImage(resizedBitmap, imageProxy)
         } else {
             imageProxy.close()
         }
     }
 
+    /**
+     * Process the image, detects faces, and triggers callbacks based on detected faces.
+     */
     @androidx.camera.core.ExperimentalGetImage
     private fun processImage(bitmap: Bitmap?, imageProxy: ImageProxy) {
+        // Convert Bitmap to InputImage fro ML Kit
         val image = bitmap?.let { InputImage.fromBitmap(it, 0) }
         if (image != null) {
             activity.viewBinding.graphicOverlay.setCameraInfo(
@@ -58,6 +67,7 @@ class FaceDetection(
             )
         }
 
+        // Process the image using ML Kit's Face Detector
         if (image != null) {
             this.faceDetector.process(image)
                 .addOnSuccessListener { faces ->
@@ -75,6 +85,9 @@ class FaceDetection(
         }
     }
 
+    /**
+     * Handles the result of successful face detection.
+     */
     @androidx.camera.core.ExperimentalGetImage
     private fun handleFaceDetectionSuccess(
         faces: List<Face>,
@@ -84,7 +97,7 @@ class FaceDetection(
             onFacesDetected(faces)
         }
 
-        // Consider uncommenting or removing the below code based on the requirements.
+        // Process each detected face.
         faces.forEach { face ->
             try {
                 val faceBitmap = cropFaceBitmap(bitmapImage, face.boundingBox)
@@ -95,6 +108,9 @@ class FaceDetection(
         }
     }
 
+    /**
+     * Crop the bitmap to focus on the face using the provided bounding box.
+     */
     @androidx.camera.core.ExperimentalGetImage
     private fun cropFaceBitmap(bitmapImage: Bitmap, boundingBox: Rect): Bitmap? {
         return bitmapImage.let {
@@ -108,6 +124,9 @@ class FaceDetection(
         }
     }
 
+    /**
+     * Resize the image for the preview while maintaining is aspect ratio.
+     */
     private fun resizePreviewImage(previewImage: Bitmap): Bitmap {
         // Get the dimensions of the View
         val targetedSize: Pair<Int, Int> = activity.getTargetedWidthHeight()
@@ -129,10 +148,12 @@ class FaceDetection(
         )
     }
 
+    // Start the analysis
     fun start() {
         isAnalysisActive = true
     }
 
+    // Stop the analysis
     fun stop() {
         isAnalysisActive = false
     }
