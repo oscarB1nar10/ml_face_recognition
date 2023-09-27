@@ -14,6 +14,9 @@ import androidx.fragment.app.DialogFragment
 import com.b1nar10.ml_face_recognition.R
 import java.io.File
 
+/**
+ * A dialog fragment to input details for a recognized face
+ */
 class InputDetailsDialogFragment : DialogFragment() {
 
     interface InputDetailsListener {
@@ -35,12 +38,16 @@ class InputDetailsDialogFragment : DialogFragment() {
             val saveButton: Button = view.findViewById(R.id.saveBt)
             val cancelButton: Button = view.findViewById(R.id.cancelBt)
 
+            // Display the bitmap (face image) on the ImageView
             faceImageView.setImageBitmap(getBitmap())
+
+            // Handle save button click
             saveButton.setOnClickListener {
                 deleteBitmapFile()
                 val id = idEditText.text.toString()
                 val name = nameEditText.text.toString()
 
+                // Check if both fields are filled
                 if (id.isNotBlank() && name.isNotBlank()) {
                     listener?.onDetailsEntered(id, name)
                     dismiss()
@@ -55,12 +62,12 @@ class InputDetailsDialogFragment : DialogFragment() {
                 }
             }
 
+            // Handle cancel button click
             cancelButton.setOnClickListener {
                 deleteBitmapFile()
                 dismiss()
                 listener?.cancel()
             }
-
 
             builder.setView(view)
                 .setTitle("Enter Details")
@@ -74,11 +81,16 @@ class InputDetailsDialogFragment : DialogFragment() {
         deleteBitmapFile()
     }
 
+    /**
+     * Set the listener for input events
+     */
     fun setListener(listener: InputDetailsListener) {
         this.listener = listener
     }
 
-    // Delete after use it
+    /**
+     * Deletes the temporary bitmap file
+     */
     private fun deleteBitmapFile() {
         val bitmapPath = getBitmapPath()
         bitmapPath?.let {
@@ -89,10 +101,20 @@ class InputDetailsDialogFragment : DialogFragment() {
         }
     }
 
+    /**
+     * Fetch the bitmap from a given path
+     */
     private fun getBitmap(): Bitmap {
         val bitmapPath = getBitmapPath()
         return BitmapFactory.decodeFile(bitmapPath)
     }
 
-    private fun getBitmapPath() = arguments?.getString("bitmap_path")
+    /**
+     * Retrieves the path of the bitmap
+     */
+    private fun getBitmapPath() = arguments?.getString(BITMAP_PATH)
+
+    companion object {
+        const val BITMAP_PATH = "bitmap_path"
+    }
 }

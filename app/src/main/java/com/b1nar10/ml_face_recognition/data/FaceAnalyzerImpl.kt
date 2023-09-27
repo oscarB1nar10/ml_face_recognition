@@ -6,7 +6,6 @@ import com.b1nar10.ml_face_recognition.data.local_datasource.EmbeddingDao
 import com.b1nar10.ml_face_recognition.data.local_datasource.EmbeddingEntity
 import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaDao
 import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaEntity
-import com.b1nar10.ml_face_recognition.data.local_datasource.PersonaWithEmbeddingsDao
 import com.b1nar10.ml_face_recognition.data.model.PersonModel
 import com.b1nar10.ml_face_recognition.data.utility.Converters
 import org.tensorflow.lite.DataType
@@ -20,26 +19,19 @@ import javax.inject.Inject
 import kotlin.math.pow
 
 /**
- * Implementation of the FaceAnalyzerRepository.
- * This class analyzes input face images using a TensorFlow Lite model, and matches them
- * against known embeddings from the database.
+ * Implementation of the FaceAnalyzerRepository
+ * Provides methods to analyze and recognize faces using a Tensorflow Lite model.
  */
 class FaceAnalyzerImpl @Inject constructor(
     private val interpreter: Interpreter,
-    private val personaDao: PersonaDao, // Data access object for the Room database
-    private val embeddingDao: EmbeddingDao,
-    private val personaWithEmbeddingsDao: PersonaWithEmbeddingsDao
+    private val personaDao: PersonaDao,
+    private val embeddingDao: EmbeddingDao
 ) : FaceAnalyzerRepository {
     private val TAG = "FaceAnalyzerImpl"
     private val tensorImage: TensorImage = TensorImage(DataType.FLOAT32)
 
     /**
-     * Analyzes an input face image.
-     * 1. Normalizes the image
-     * 2. Runs the TFLite model to get an embedding
-     * 3. Matches the embedding against known embeddings in the database
-     * @param bitmapImage The input face image.
-     * @return Name of the recognized person or "Unknown" if no match is found.
+     * Analyzes a face image to recognize the person
      */
     override suspend fun analyzeFaceImage(bitmapImage: Bitmap): PersonModel {
         // Normalize the image
@@ -53,13 +45,16 @@ class FaceAnalyzerImpl @Inject constructor(
         return PersonModel(personName = recognizedName, bitMapImage = bitmapImage)
     }
 
+    /**
+     * Saves a new face (it's embedding to the database)
+     */
     override suspend fun saveNewFace(personModel: PersonModel): Boolean {
         return try {
             val tensorImage = normalizeImage(personModel.bitMapImage)
             val outputEmbeddingSize = Array(1) { FloatArray(FEATURE_VECTOR_SIZE) }
             interpreter.run(tensorImage.buffer, outputEmbeddingSize)
 
-            // User does not exist, save them
+            // Serialize the embedding and save to the database
             val serializedEncoding = Converters.fromFloatArrayToJson(outputEmbeddingSize[0])
             val persona =
                 PersonaEntity(id = personModel.id, name = personModel.personName)
@@ -85,18 +80,16 @@ class FaceAnalyzerImpl @Inject constructor(
     }
 
     /**
-     * Matches an embedding against known embeddings in the database.
-     * @param embedding The embedding to match.
-     * @return Name of the closest match or "Unknown".
+     * Fin the closest embedding for the given embedding
      */
-    private suspend fun findClosestMatch(embedding: FloatArray): String {
+    private fun findClosestMatch(embedding: FloatArray): String {
         try {
             val knownEmbeddings = embeddingDao.getEmbeddings()
 
             var minDistance = Float.MAX_VALUE
             var userId = ""
 
-            // Calculate the distance between the input embedding and each known embedding
+            // Calculate the distance between the input embedding and each saved embedding
             for (knownEmbedding in knownEmbeddings) {
                 val distance =
                     calculateDistance(
@@ -109,8 +102,8 @@ class FaceAnalyzerImpl @Inject constructor(
                 }
             }
 
-            // Only return the closest match if it's below a certain threshold
-            val recognitionThreshold = 10.0f
+            // Use a threshold to decide if the face is recognized or unknown
+            val recognitionThreshold = RECOGNITION_THRESHOLD
             return if (minDistance < recognitionThreshold) {
                 personaDao.getPersona(userId).name
             } else {
@@ -122,10 +115,7 @@ class FaceAnalyzerImpl @Inject constructor(
     }
 
     /**
-     * Calculates the Euclidean distance between two embeddings.
-     * @param embedding1 The first embedding.
-     * @param embedding2 The second embedding.
-     * @return The Euclidean distance.
+     * Calculate the euclidean distance between two embeddings
      */
     private fun calculateDistance(embedding1: FloatArray, embedding2: FloatArray): Float {
         return kotlin.math.sqrt(
@@ -134,12 +124,8 @@ class FaceAnalyzerImpl @Inject constructor(
     }
 
     /**
-     * Normalizes an input image to be suitable for the model.
-     * 1. Crops/pads the image to 160x160.
-     * 2. Resizes the image to 160x160.
-     * 3. Normalizes the pixel values.
-     * @param bitmapImage The input image.
-     * @return The normalized image.
+     * Normalizes and preprocess the input image to make it suitable for the model
+     *
      */
     private fun normalizeImage(bitmapImage: Bitmap): TensorImage {
         // Define the preprocessing operations
@@ -168,5 +154,6 @@ class FaceAnalyzerImpl @Inject constructor(
     companion object {
         const val IMAGE_TARGET_SIZE = 224
         const val FEATURE_VECTOR_SIZE = 1280
+        const val RECOGNITION_THRESHOLD = 10.0f
     }
 }

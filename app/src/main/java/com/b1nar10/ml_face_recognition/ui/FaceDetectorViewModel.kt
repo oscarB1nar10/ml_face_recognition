@@ -28,11 +28,15 @@ class FaceDetectorViewModel @Inject constructor(
     val uiState: StateFlow<FaceRecognitionUiState> = _uiState.asStateFlow()
 
 
+    /**
+     * Analyzes a given face image and updates the UI state based on the recognition result.
+     */
     fun analyzeFaceImage(bitMapImage: Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val personModel = faceAnalyzerRepository.analyzeFaceImage(bitMapImage)
 
+                // Update the UI state based on  whether the person is recognized or unknown
                 if (personModel.personName == "Unknown") {
                     _uiState.update {
                         it.copy(
@@ -62,6 +66,9 @@ class FaceDetectorViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Saves a new face to the repository and resets the recognition state if successful
+     */
     fun saveNewFace(personModel: PersonModel) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -78,6 +85,9 @@ class FaceDetectorViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Resets the recognition state to idle
+     */
     fun onResetRecognitionState() {
         _uiState.update {
             it.copy(recognitionState = RecognitionState.Idle)
